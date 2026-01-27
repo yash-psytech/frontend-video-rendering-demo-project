@@ -5,7 +5,7 @@
 import FlutterMacOS
 import Foundation
 
-import ffmpeg_kit_flutter_new_min
+import ffmpeg_kit_flutter_new
 import gal
 import sqflite_darwin
 import video_player_avfoundation

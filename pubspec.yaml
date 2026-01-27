@@ -13,9 +13,9 @@ dependencies:
   # Video playback
   video_player: ^2.9.3
   
-  # Lightweight FFmpeg for video processing with animations
-  # Using the actively maintained fork with minimal codecs to reduce app size
-  ffmpeg_kit_flutter_new_min: ^3.1.0
+  # FFmpeg for video processing with animations
+  # Using Full GPL version which includes PNG decoder and libx264
+  ffmpeg_kit_flutter_new: ^4.1.0
   
   # Path provider for file operations
   path_provider: ^2.1.5

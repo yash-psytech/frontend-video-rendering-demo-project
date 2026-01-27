@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_min/ffmpeg_kit_config.dart';
-import 'package:ffmpeg_kit_flutter_new_min/return_code.dart';
-import 'package:ffmpeg_kit_flutter_new_min/statistics.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit_config.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:ffmpeg_kit_flutter_new/statistics.dart';
 import 'package:gal/gal.dart';
 
 import '../models/branding_template.dart';
@@ -238,21 +238,24 @@ class VideoOverlayService {
     }
 
     // Build the input string
+    // Note: -loop 1 before image inputs makes them repeat for the video duration
     final inputs = StringBuffer();
     inputs.write('-i "$videoPath"');
     if (photoPath != null) {
-      inputs.write(' -i "$photoPath"');
+      inputs.write(' -loop 1 -i "$photoPath"');
     }
     if (namePath != null) {
-      inputs.write(' -i "$namePath"');
+      inputs.write(' -loop 1 -i "$namePath"');
     }
 
-    // Build the complete command with ultrafast preset for speed
+    // Build the complete command
+    // Use libx264 software encoder with ultrafast preset for best compatibility
+    // The full GPL FFmpeg package includes libx264 and PNG decoder
     return '${inputs.toString()} '
         '-filter_complex "$filterComplex" '
         '-map "[out]" -map 0:a? '
         '-c:v libx264 -preset ultrafast -crf 23 '
-        '-c:a copy '
+        '-c:a copy -shortest '
         '-y "$outputPath"';
   }
 
