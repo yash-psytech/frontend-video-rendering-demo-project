@@ -1,6 +1,8 @@
 # Flutter video_player plugin - prevent Pigeon classes from being stripped
 -keep class dev.flutter.pigeon.** { *; }
+-keep class dev.flutter.pigeon.video_player_android.** { *; }
 -keep class io.flutter.plugins.videoplayer.** { *; }
+-keepattributes Signature, InnerClasses, EnclosingMethod
 
 # Keep Flutter embedding
 -keep class io.flutter.** { *; }

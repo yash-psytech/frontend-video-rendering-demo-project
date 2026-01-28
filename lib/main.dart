@@ -78,7 +78,7 @@ class _DemoScreenState extends State<DemoScreen> {
   // State
   AnimationType _selectedAnimation = AnimationType.slideUpFade;
   String _userName = 'Demo User';
-  bool _isLoading = false; // Start with false to show UI immediately
+  final bool _isLoading = false; // Start with false to show UI immediately
   bool _isExporting = false;
   String? _errorMessage;
   String? _localVideoPath;
@@ -451,8 +451,9 @@ class _DemoScreenState extends State<DemoScreen> {
                   onSelected: (selected) {
                     if (selected) {
                       setState(() => _selectedAnimation = type);
-                      // Restart video to see new animation
-                      _videoPlayerKey.currentState?.restartWithAnimation();
+                      // Only restart video; overlay animation restarts automatically on widget update
+                      _videoPlayerKey.currentState?.seekTo(Duration.zero);
+                      _videoPlayerKey.currentState?.play();
                     }
                   },
                 );

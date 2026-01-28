@@ -225,8 +225,19 @@ class VideoOverlayService {
         );
         break;
 
-      case AnimationType.static:
       case AnimationType.revolve:
+        filterComplex = _buildRevolveFilter(
+          photoPath: photoPath,
+          namePath: namePath,
+          photoYPosition: photoYPosition,
+          nameYPosition: nameYPosition,
+          duration: animationDuration,
+          delay: delay,
+          photoSize: template.photoSize,
+        );
+        break;
+
+      case AnimationType.static:
         // Static overlay (no animation)
         filterComplex = _buildStaticFilter(
           photoPath: photoPath,
@@ -457,6 +468,73 @@ class VideoOverlayService {
         '[$previousOutput][$inputIndex:v] overlay='
         "x='(W-w)/2':"
         "y='$nameYPosition' [out]",
+      );
+    } else if (photoPath != null) {
+      filters.add('[bg_photo] copy [out]');
+    } else {
+      filters.add('[0:v] copy [out]');
+    }
+
+    return filters.join('; ');
+  }
+
+  /// Build Revolve animation filter
+  String _buildRevolveFilter({
+    String? photoPath,
+    String? namePath,
+    required String photoYPosition,
+    required String nameYPosition,
+    required double duration,
+    required double delay,
+    required double photoSize,
+  }) {
+    final filters = <String>[];
+    int inputIndex = 1;
+    String previousOutput = '0:v';
+
+    // Revolve: Rotates from -30 degrees (-0.5 rad) to 0.
+    // Also fades in slightly to be smooth.
+    // angle = -0.5 * max(1 - (t-delay)/duration, 0)
+
+    if (photoPath != null) {
+      // Apply rotation and fade
+      // Use fillcolor=none (or c=none) for transparency
+      filters.add(
+        '[$inputIndex:v] format=rgba, '
+        "fade=t=in:st=$delay:d=$duration:alpha=1, "
+        "rotate=angle='if(gte(t,$delay), -0.5 * max(1 - (t-$delay)/$duration, 0), -0.5)':"
+        "fillcolor=none:ow='rotw(iw)':oh='roth(ih)' [photo_rotated]",
+      );
+
+      // Positioning needs to account for the center rotation
+      // Since rotation changes dimensions, we center it.
+      // Overlay coordinates x,y are top-left.
+      // We want to center it at (W-w)/2, etc.
+      // Since w, h change with rotation, centering formula (W-w)/2 works dynamically if w is input width
+      filters.add(
+        '[$previousOutput][photo_rotated] overlay='
+        "x='(W-w)/2':"
+        "y='$photoYPosition + (roth($photoSize) - h)/2':" // Adjust Y to keep center stable-ish
+        "enable='gte(t,$delay)' [bg_photo]",
+      );
+      previousOutput = 'bg_photo';
+      inputIndex++;
+    }
+
+    if (namePath != null) {
+      // Name also revolves or just fades? Let's revolve it too for consistency.
+      filters.add(
+        '[$inputIndex:v] format=rgba, '
+        "fade=t=in:st=$delay:d=$duration:alpha=1, "
+        "rotate=angle='if(gte(t,$delay), -0.5 * max(1 - (t-$delay)/$duration, 0), -0.5)':"
+        "fillcolor=none:ow='rotw(iw)':oh='roth(ih)' [name_rotated]",
+      );
+
+      filters.add(
+        '[$previousOutput][name_rotated] overlay='
+        "x='(W-w)/2':"
+        "y='$nameYPosition':"
+        "enable='gte(t,$delay)' [out]",
       );
     } else if (photoPath != null) {
       filters.add('[bg_photo] copy [out]');

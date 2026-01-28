@@ -25,52 +25,80 @@ class AnimatedBrandingOverlay extends StatefulWidget {
 
 class AnimatedBrandingOverlayState extends State<AnimatedBrandingOverlay>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
-  late Animation<double> _rotateAnimation;
+  AnimationController? _controller;
+  Animation<double> _fadeAnimation = const AlwaysStoppedAnimation(1.0);
+  Animation<Offset> _slideAnimation = const AlwaysStoppedAnimation(Offset.zero);
+  Animation<double> _rotateAnimation = const AlwaysStoppedAnimation(0.0);
+
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
-    _setupAnimations();
+    _isDisposed = false;
+    _initializeController();
     if (widget.autoPlay) {
       _startAnimation();
     }
   }
 
-  @override
-  void didUpdateWidget(AnimatedBrandingOverlay oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.template.animation != widget.template.animation) {
-      _controller.dispose();
-      _setupAnimations();
-      if (widget.autoPlay) {
-        _startAnimation();
-      }
-    }
-  }
+  void _initializeController() {
+    // Dispose existing controller if any
+    _controller?.dispose();
 
-  void _setupAnimations() {
     final duration = widget.template.duration;
-
     _controller = AnimationController(duration: duration, vsync: this);
 
-    _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed) {
+    _controller!.addStatusListener((status) {
+      if (status == AnimationStatus.completed && !_isDisposed) {
         widget.onAnimationComplete?.call();
       }
     });
 
+    _setupAnimations();
+  }
+
+  @override
+  void didUpdateWidget(AnimatedBrandingOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Only reinitialize if the animation type actually changed
+    if (oldWidget.template.animation != widget.template.animation) {
+      // Use post-frame callback to avoid issues during build
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !_isDisposed) {
+          _initializeController();
+          if (widget.autoPlay) {
+            _startAnimation();
+          }
+        }
+      });
+    }
+  }
+
+  void _setupAnimations() {
+    if (_controller == null || _isDisposed) return;
+
     // Setup animations based on type
     switch (widget.template.animation) {
       case AnimationType.fadeIn:
+        _fadeAnimation = Tween<double>(
+          begin: 0.0,
+          end: 1.0,
+        ).animate(CurvedAnimation(parent: _controller!, curve: Curves.easeOut));
+        _slideAnimation = const AlwaysStoppedAnimation(Offset.zero);
+        _rotateAnimation = const AlwaysStoppedAnimation(0.0);
+        break;
+
       case AnimationType.slideUpFade:
         _fadeAnimation = Tween<double>(
           begin: 0.0,
           end: 1.0,
-        ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-        _slideAnimation = const AlwaysStoppedAnimation(Offset.zero);
+        ).animate(CurvedAnimation(parent: _controller!, curve: Curves.easeOut));
+        _slideAnimation = Tween<Offset>(
+          begin: const Offset(0.0, 1.0),
+          end: Offset.zero,
+        ).animate(CurvedAnimation(parent: _controller!, curve: Curves.easeOut));
         _rotateAnimation = const AlwaysStoppedAnimation(0.0);
         break;
 
@@ -82,7 +110,7 @@ class AnimatedBrandingOverlayState extends State<AnimatedBrandingOverlay>
               begin: const Offset(1.5, 0.0), // Start off-screen to the right
               end: Offset.zero, // End at center
             ).animate(
-              CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+              CurvedAnimation(parent: _controller!, curve: Curves.easeOutCubic),
             );
         _rotateAnimation = const AlwaysStoppedAnimation(0.0);
         break;
@@ -92,7 +120,7 @@ class AnimatedBrandingOverlayState extends State<AnimatedBrandingOverlay>
         _slideAnimation = Tween<Offset>(
           begin: const Offset(0.0, 1.0), // Start off-screen at bottom
           end: Offset.zero,
-        ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+        ).animate(CurvedAnimation(parent: _controller!, curve: Curves.easeOut));
         _rotateAnimation = const AlwaysStoppedAnimation(0.0);
         break;
 
@@ -100,7 +128,7 @@ class AnimatedBrandingOverlayState extends State<AnimatedBrandingOverlay>
         _fadeAnimation = const AlwaysStoppedAnimation(1.0);
         _slideAnimation = const AlwaysStoppedAnimation(Offset.zero);
         _rotateAnimation = Tween<double>(begin: -0.1, end: 0.0).animate(
-          CurvedAnimation(parent: _controller, curve: Curves.elasticOut),
+          CurvedAnimation(parent: _controller!, curve: Curves.elasticOut),
         );
         break;
 
@@ -113,33 +141,43 @@ class AnimatedBrandingOverlayState extends State<AnimatedBrandingOverlay>
   }
 
   void _startAnimation() {
+    if (_isDisposed || _controller == null) return;
+
     Future.delayed(widget.template.delay, () {
-      if (mounted) {
-        _controller.forward(from: 0.0);
+      if (mounted && !_isDisposed && _controller != null) {
+        _controller!.forward(from: 0.0);
       }
     });
   }
 
   /// Restart the animation - public method for external control
   void restartAnimation() {
-    _controller.reset();
+    if (_isDisposed || _controller == null) return;
+    _controller!.reset();
     _startAnimation();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _isDisposed = true;
+    _controller?.dispose();
+    _controller = null;
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Guard against building after dispose or before init
+    if (_controller == null || _isDisposed) {
+      return const SizedBox.shrink();
+    }
+
     return Positioned(
       bottom: 0,
       left: 0,
       right: 0,
       child: AnimatedBuilder(
-        listenable: _controller,
+        animation: _controller!,
         builder: (context, child) => FadeTransition(
           opacity: _fadeAnimation,
           child: SlideTransition(
@@ -223,11 +261,34 @@ class AnimatedBrandingOverlayState extends State<AnimatedBrandingOverlay>
 
 /// Custom AnimatedBuilder that uses child optimization
 class AnimatedBuilder extends StatelessWidget {
-  final Listenable listenable;
+  final Animation<double> animation;
   final Widget Function(BuildContext context, Widget? child) builder;
   final Widget? child;
 
   const AnimatedBuilder({
+    super.key,
+    required this.animation,
+    required this.builder,
+    this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder2(
+      listenable: animation,
+      builder: builder,
+      child: child,
+    );
+  }
+}
+
+/// Internal builder using Listenable
+class AnimatedBuilder2 extends StatelessWidget {
+  final Listenable listenable;
+  final Widget Function(BuildContext context, Widget? child) builder;
+  final Widget? child;
+
+  const AnimatedBuilder2({
     super.key,
     required this.listenable,
     required this.builder,

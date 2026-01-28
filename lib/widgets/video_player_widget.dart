@@ -38,7 +38,9 @@ class VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   bool _isInitialized = false;
   bool _hasError = false;
   String? _errorMessage;
-  final GlobalKey<AnimatedBrandingOverlayState> _overlayKey = GlobalKey();
+
+  // Use a simple key counter to force overlay recreation when needed
+  int _overlayKeyCounter = 0;
 
   @override
   void initState() {
@@ -49,10 +51,19 @@ class VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   @override
   void didUpdateWidget(VideoPlayerWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
+
+    // Reinitialize video if source changed
     if (oldWidget.videoUrl != widget.videoUrl ||
         oldWidget.videoPath != widget.videoPath) {
       _disposeController();
       _initializeVideo();
+    }
+
+    // If animation type changed, increment counter to recreate overlay with new key
+    if (oldWidget.template.animation != widget.template.animation) {
+      setState(() {
+        _overlayKeyCounter++;
+      });
     }
   }
 
@@ -116,7 +127,10 @@ class VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   void restartWithAnimation() {
     _controller?.seekTo(Duration.zero);
     _controller?.play();
-    _overlayKey.currentState?.restartAnimation();
+    // Recreate the overlay to restart animation
+    setState(() {
+      _overlayKeyCounter++;
+    });
   }
 
   /// Get current playback position
@@ -158,48 +172,54 @@ class VideoPlayerWidgetState extends State<VideoPlayerWidget> {
           // Video layer
           VideoPlayer(_controller!),
 
-          // Branding overlay
+          // Branding overlay - using ValueKey to force recreation when animation changes
           AnimatedBrandingOverlay(
-            key: _overlayKey,
+            key: ValueKey(
+              'overlay_${widget.template.animation.name}_$_overlayKeyCounter',
+            ),
             template: widget.template,
             photoUrl: widget.photoUrl,
             autoPlay: widget.autoPlay,
           ),
 
           // Play/Pause overlay (tap to toggle)
-          GestureDetector(
-            onTap: () {
-              setState(() {
-                if (_controller!.value.isPlaying) {
-                  _controller!.pause();
-                } else {
-                  _controller!.play();
-                }
-              });
-            },
+          _buildPlayPauseOverlay(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlayPauseOverlay() {
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (_controller!.value.isPlaying) {
+            _controller!.pause();
+          } else {
+            _controller!.play();
+          }
+        });
+      },
+      child: Container(
+        color: Colors.transparent,
+        child: AnimatedOpacity(
+          opacity: _controller!.value.isPlaying ? 0.0 : 1.0,
+          duration: const Duration(milliseconds: 200),
+          child: Center(
             child: Container(
-              color: Colors.transparent,
-              child: AnimatedOpacity(
-                opacity: _controller!.value.isPlaying ? 0.0 : 1.0,
-                duration: const Duration(milliseconds: 200),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius: BorderRadius.circular(40),
-                    ),
-                    child: const Icon(
-                      Icons.play_arrow,
-                      color: Colors.white,
-                      size: 48,
-                    ),
-                  ),
-                ),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(40),
+              ),
+              child: const Icon(
+                Icons.play_arrow,
+                color: Colors.white,
+                size: 48,
               ),
             ),
           ),
-        ],
+        ),
       ),
     );
   }
